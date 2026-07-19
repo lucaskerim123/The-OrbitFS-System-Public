@@ -2,7 +2,7 @@
 	import { api, ApiError } from '$lib/api';
 	import { kindOf, highlightLangOf } from '$lib/file-type';
 	import { Button } from '$lib/components/ui';
-	import { X, Pencil, Eye, Save, Download, LoaderCircle, Move, Link, Trash2, FileOutput } from '@lucide/svelte';
+	import { X, Pencil, Eye, Save, Download, LoaderCircle, Move, Link, Trash2, FileOutput, FileMusic, FileVideoCamera } from '@lucide/svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import hljs from 'highlight.js';
@@ -46,6 +46,10 @@
 	let actionError = $state('');
 
 	let blobUrl = $state<string | null>(null);
+	let documentHtml = $state('');
+	type SheetPreview = { name: string; rows: string[][]; truncated: boolean };
+	let sheetPreviews = $state<SheetPreview[]>([]);
+	let activeSheet = $state(0);
 
 	const canEdit = $derived((kind === 'text' || kind === 'markdown') && !!permissions?.write);
 	const canDownload = $derived(!!permissions?.download);
@@ -70,6 +74,39 @@
 		return hljs.highlightAuto(content).value;
 	});
 
+	function cellText(value: unknown): string {
+		if (value == null) return '';
+		if (value instanceof Date) return value.toLocaleString();
+		if (typeof value !== 'object') return String(value);
+		const item = value as { text?: string; result?: unknown; hyperlink?: string; richText?: { text?: string }[] };
+		if (item.richText) return item.richText.map((part) => part.text ?? '').join('');
+		if (item.result != null) return cellText(item.result);
+		return item.text ?? item.hyperlink ?? '';
+	}
+
+	async function loadDocument(blob: Blob) {
+		const mammoth = await import('mammoth');
+		const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
+		documentHtml = DOMPurify.sanitize(result.value);
+	}
+
+	async function loadSpreadsheet(blob: Blob) {
+		const { Workbook } = await import('exceljs');
+		const workbook = new Workbook();
+		await workbook.xlsx.load((await blob.arrayBuffer()) as never);
+		sheetPreviews = workbook.worksheets.map((worksheet) => {
+			const rows: string[][] = [];
+			let truncated = worksheet.rowCount > 500 || worksheet.columnCount > 100;
+			worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+				if (rowNumber > 500) return;
+				const values = Array.isArray(row.values) ? row.values.slice(1, 101).map(cellText) : [];
+				rows.push(values);
+			});
+			return { name: worksheet.name, rows, truncated };
+		});
+		activeSheet = 0;
+	}
+
 	async function load() {
 		loading = true;
 		error = '';
@@ -80,6 +117,9 @@
 		permissions = null;
 		content = '';
 		draft = '';
+		documentHtml = '';
+		sheetPreviews = [];
+		activeSheet = 0;
 		if (blobUrl) URL.revokeObjectURL(blobUrl);
 		blobUrl = null;
 		try {
@@ -90,6 +130,10 @@
 				);
 				content = res.content;
 				permissions = res.permissions;
+			} else if (kind === 'document') {
+				await loadDocument(await api.previewBlob(path));
+			} else if (kind === 'spreadsheet') {
+				await loadSpreadsheet(await api.previewBlob(path));
 			} else if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'pdf') {
 				blobUrl = await api.previewBlobUrl(path);
 			}
@@ -179,9 +223,9 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="fixed inset-0 z-40 flex flex-col bg-background">
-	<header class="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-		<span class="truncate text-sm font-medium">{name}</span>
-		<div class="ml-auto flex items-center gap-2">
+	<header class="flex min-h-14 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+		<span class="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+		<div class="flex max-w-[72%] shrink-0 items-center gap-1 overflow-x-auto overscroll-contain sm:max-w-none">
 			{#if canEdit}
 				{#if editing}
 					<Button size="sm" variant="ghost" onclick={cancelEdit}>
@@ -198,30 +242,30 @@
 				{/if}
 			{/if}
 			{#if canDownload}
-				<Button size="sm" variant="ghost" onclick={downloadCurrent} aria-label="Download">
+				<Button size="sm" variant="ghost" onclick={downloadCurrent} aria-label="Download" title="Download">
 					<Download />
 				</Button>
 			{/if}
-			<Button size="sm" variant="ghost" onclick={exportFile} aria-label="Export">
+			<Button size="sm" variant="ghost" onclick={exportFile} aria-label="Export" title="Export through MCP">
 				<FileOutput />
 			</Button>
 			{#if onShare && canShare}
-				<Button size="sm" variant="ghost" onclick={() => onShare?.(path, name)} aria-label="Share">
+				<Button size="sm" variant="ghost" onclick={() => onShare?.(path, name)} aria-label="Share" title="Share">
 					<Link />
 				</Button>
 			{/if}
 			{#if onRename && canMove}
-				<Button size="sm" variant="ghost" onclick={() => onRename?.(path)} aria-label="Rename">
+				<Button size="sm" variant="ghost" onclick={() => onRename?.(path)} aria-label="Rename" title="Rename">
 					<Pencil />
 				</Button>
 			{/if}
 			{#if onMove && canMove}
-				<Button size="sm" variant="ghost" onclick={() => onMove?.(path)} aria-label="Move">
+				<Button size="sm" variant="ghost" onclick={() => onMove?.(path)} aria-label="Move" title="Move">
 					<Move />
 				</Button>
 			{/if}
 			{#if onTrash && canDelete}
-				<Button size="sm" variant="ghost" onclick={() => onTrash?.(path)} aria-label="Move to trash">
+				<Button size="sm" variant="ghost" onclick={() => onTrash?.(path)} aria-label="Move to trash" title="Move to trash">
 					<Trash2 />
 				</Button>
 			{/if}
@@ -229,6 +273,7 @@
 				class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
 				onclick={closeViewer}
 				aria-label="Close"
+				title="Close preview"
 			>
 				<X class="size-5" />
 			</button>
@@ -273,18 +318,83 @@
 			{:else}
 				<pre class="overflow-auto p-4 text-sm"><code class="hljs">{@html highlighted}</code></pre>
 			{/if}
+		{:else if kind === 'document' && documentHtml}
+			<div class="min-h-full bg-muted/30 p-3 md:p-8">
+				<article class="prose mx-auto min-h-[70vh] max-w-4xl rounded-lg bg-white px-6 py-8 text-black shadow-xl md:px-12 md:py-10">
+					{@html documentHtml}
+				</article>
+			</div>
+		{:else if kind === 'spreadsheet' && sheetPreviews.length > 0}
+			{@const sheet = sheetPreviews[activeSheet]}
+			<div class="flex h-full min-w-0 flex-col">
+				<div class="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-card px-2 pt-2">
+					{#each sheetPreviews as item, index (item.name)}
+						<button
+							class="whitespace-nowrap rounded-t-md border border-b-0 px-3 py-1.5 text-xs {activeSheet === index ? 'border-border bg-background font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'}"
+							onclick={() => (activeSheet = index)}
+						>{item.name}</button>
+					{/each}
+				</div>
+				<div class="flex-1 overflow-auto">
+					<table class="min-w-full border-collapse bg-background text-xs">
+						<tbody>
+							{#each sheet.rows as row, rowIndex}
+								<tr class={rowIndex === 0 ? 'bg-muted/60 font-medium' : ''}>
+									<th class="sticky left-0 border border-border bg-muted px-2 py-1 text-right font-normal text-muted-foreground">{rowIndex + 1}</th>
+									{#each row as cell}
+										<td class="max-w-80 whitespace-pre-wrap border border-border px-2 py-1 align-top">{cell}</td>
+									{/each}
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				{#if sheet.truncated}
+					<div class="shrink-0 border-t border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">Preview limited to the first 500 rows and 100 columns.</div>
+				{/if}
+			</div>
 		{:else if kind === 'image' && blobUrl}
 			<div class="flex h-full items-center justify-center p-4">
 				<img src={blobUrl} alt={name} class="max-h-full max-w-full object-contain" />
 			</div>
 		{:else if kind === 'video' && blobUrl}
-			<div class="flex h-full items-center justify-center p-4">
-				<!-- svelte-ignore a11y_media_has_caption -->
-				<video src={blobUrl} controls class="max-h-full max-w-full"></video>
+			<div class="flex h-full items-center justify-center bg-black p-2 md:p-4">
+				<div class="flex h-full w-full max-w-6xl flex-col items-center justify-center gap-3">
+					<div class="flex items-center gap-2 self-start text-xs text-white/60">
+						<FileVideoCamera class="size-4" />
+						<span class="truncate">{name}</span>
+					</div>
+					<!-- svelte-ignore a11y_media_has_caption -->
+					<video
+						src={blobUrl}
+						controls
+						playsinline
+						preload="metadata"
+						class="max-h-[calc(100%-2rem)] w-full rounded-lg bg-black shadow-2xl"
+						onerror={() => (error = 'This video format or codec cannot be played by this browser.')}
+					></video>
+				</div>
 			</div>
 		{:else if kind === 'audio' && blobUrl}
 			<div class="flex h-full items-center justify-center p-4">
-				<audio src={blobUrl} controls></audio>
+				<div class="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-xl">
+					<div class="mb-5 flex items-center gap-4">
+						<div class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+							<FileMusic class="size-7" />
+						</div>
+						<div class="min-w-0">
+							<p class="truncate text-sm font-medium">{name}</p>
+							<p class="text-xs text-muted-foreground">Audio preview</p>
+						</div>
+					</div>
+					<audio
+						src={blobUrl}
+						controls
+						preload="metadata"
+						class="w-full"
+						onerror={() => (error = 'This audio format or codec cannot be played by this browser.')}
+					></audio>
+				</div>
 			</div>
 		{:else if kind === 'pdf' && blobUrl}
 			<iframe src={blobUrl} title={name} class="h-full w-full border-0"></iframe>

@@ -64,6 +64,11 @@ export const api = {
 		const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a');
 		a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
 	},
+	previewBlob: async (path: string) => {
+		const res = await fetch(apiUrl(`/preview?path=${encodeURIComponent(path)}`), { headers: authHeaders() });
+		if (!res.ok) throw new ApiError('Preview failed', res.status);
+		return res.blob();
+	},
 	previewBlobUrl: async (path: string) => {
 		const res = await fetch(apiUrl(`/preview?path=${encodeURIComponent(path)}`), { headers: authHeaders() });
 		if (!res.ok) throw new ApiError('Preview failed', res.status);

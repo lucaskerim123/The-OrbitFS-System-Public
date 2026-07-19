@@ -11,6 +11,7 @@
 	import FileViewer from '$lib/components/file-viewer.svelte';
 	import FolderPicker from '$lib/components/folder-picker.svelte';
 	import ShareModal from '$lib/components/share-modal.svelte';
+	import PermissionsModal from '$lib/components/permissions-modal.svelte';
 	import {
 		ChevronRight,
 		FolderPlus,
@@ -23,7 +24,8 @@
 		Link,
 		X,
 		LoaderCircle,
-		HardDrive
+		HardDrive,
+		ShieldCheck
 	} from '@lucide/svelte';
 
 	type Entry = { name: string; type: 'dir' | 'file'; size?: number; mtime?: string; system?: boolean; protected?: boolean; hidden?: boolean };
@@ -60,6 +62,8 @@
 	let movePaths = $state<string[] | null>(null);
 	let selected = $state<Set<string>>(new Set());
 	let bulkBusy = $state(false);
+	let canManagePermissions = $state(false);
+	let permissionTarget = $state<{ path: string; kind: 'file' | 'folder' } | null>(null);
 
 	function joinPath(dir: string, name: string) {
 		return dir ? `${dir}/${name}` : name;
@@ -73,11 +77,11 @@
 		loading = true;
 		error = '';
 		try {
-			const res = await api.get<{ entries: Entry[]; folderPermissions: FolderPermissions }>(
+			const res = await api.get<{ entries: Entry[]; folderPermissions: FolderPermissions; canManagePermissions: boolean }>(
 				`/files?subpath=${encodeURIComponent(currentPath)}`
 			);
 			folderPermissions = res.folderPermissions;
-			folderPermissions = res.folderPermissions;
+			canManagePermissions = Boolean(res.canManagePermissions);
 			entries = [...res.entries].sort((a, b) =>
 				a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1
 			);
@@ -277,9 +281,18 @@
 				{/each}
 			</nav>
 		</div>
-		<div class="flex gap-2">
-			<Button variant="outline" size="sm" onclick={() => load()}>
-				<RefreshCw class="size-4" />
+		<div class="flex w-full gap-2 overflow-x-auto pb-1 sm:w-auto sm:pb-0">
+			<Button variant="outline" size="sm" onclick={() => load()} title="Refresh files">
+				<RefreshCw class="size-4" />Refresh
+			</Button>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => (permissionTarget = { path: currentPath, kind: 'folder' })}
+				disabled={!canManagePermissions}
+				title="Adjust this folder's permissions"
+			>
+				<ShieldCheck class="size-4" />Permissions
 			</Button>
 			<Button variant="outline" size="sm" onclick={() => (creatingFolder = true)} disabled={!folderPermissions.create}>
 				<FolderPlus />New folder
@@ -298,17 +311,17 @@
 	</div>
 
 	{#if selected.size > 0}
-		<div class="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+		<div class="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
 			<span class="font-medium">{selected.size} selected</span>
-			<div class="ml-auto flex gap-1.5">
+			<div class="ml-auto flex max-w-full gap-1.5 overflow-x-auto">
 				<Button size="sm" variant="outline" disabled={bulkBusy || !folderPermissions.download} onclick={bulkDownload}>
-					<Download class="size-4" />
+					<Download class="size-4" />Download
 				</Button>
 				<Button size="sm" variant="outline" disabled={bulkBusy || !folderPermissions.move} onclick={() => (movePaths = [...selected])}>
-					<Move class="size-4" />
+					<Move class="size-4" />Move
 				</Button>
 				<Button size="sm" variant="outline" disabled={bulkBusy || !folderPermissions.delete} onclick={bulkTrash}>
-					{#if bulkBusy}<LoaderCircle class="size-4 animate-spin" />{:else}<Trash2 class="size-4" />{/if}
+					{#if bulkBusy}<LoaderCircle class="size-4 animate-spin" />{:else}<Trash2 class="size-4" />{/if}Trash
 				</Button>
 				<Button size="sm" variant="ghost" onclick={() => (selected = new Set())}>Clear</Button>
 			</div>
@@ -410,7 +423,7 @@
 											submitRename();
 										}}
 									>
-										<Icon class="size-4 shrink-0 text-muted-foreground" />
+										<Icon class="size-5 shrink-0 {entry.type === 'dir' ? 'text-amber-400' : 'text-sky-400'}" />
 										<input
 											autofocus
 											bind:value={renameValue}
@@ -423,7 +436,7 @@
 										class="flex items-center gap-2.5 text-left font-medium hover:text-primary"
 										onclick={() => openFolder(fullPath)}
 									>
-										<Icon class="size-4 shrink-0 text-muted-foreground" />
+										<Icon class="size-5 shrink-0 {entry.type === 'dir' ? 'text-amber-400' : 'text-sky-400'}" />
 										{entry.name}
 									</button>
 								{:else}
@@ -431,7 +444,7 @@
 										class="flex items-center gap-2.5 text-left hover:text-primary"
 										onclick={() => (viewerPath = fullPath)}
 									>
-										<Icon class="size-4 shrink-0 text-muted-foreground" />
+										<Icon class="size-5 shrink-0 text-sky-400" />
 										{entry.name}
 									</button>
 								{/if}
@@ -444,18 +457,30 @@
 							</td>
 							<td class="px-4 py-2">
 								<div class="flex justify-end gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+									{#if !entry.protected && canManagePermissions}
+										<button
+											class="flex size-8 items-center justify-center rounded-md text-violet-400 hover:bg-violet-500/15 hover:text-violet-300"
+											aria-label="Permissions for {entry.name}"
+											title="Permissions"
+											onclick={() => (permissionTarget = { path: fullPath, kind: entry.type === 'dir' ? 'folder' : 'file' })}
+										>
+											<ShieldCheck class="size-4" />
+										</button>
+									{/if}
 									{#if entry.type === 'file' && !entry.protected}
 										<button
-											class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+											class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
 											aria-label="Download"
+											title="Download"
 											disabled={!folderPermissions.download}
 											onclick={() => download(entry)}
 										>
 											<Download class="size-4" />
 										</button>
 										<button
-											class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+											class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
 											aria-label="Share"
+											title="Share"
 											disabled={!folderPermissions.share}
 											onclick={() => (sharePath = { path: fullPath, name: entry.name })}
 										>
@@ -463,24 +488,27 @@
 										</button>
 									{/if}
 									<button
-										class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+										class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
 										aria-label="Rename"
+											title="Rename"
 										disabled={entry.protected || !folderPermissions.move}
 										onclick={() => startRename(entry)}
 									>
 										<Pencil class="size-4" />
 									</button>
 									<button
-										class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+										class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
 										aria-label="Move"
+											title="Move"
 										disabled={entry.protected || !folderPermissions.move}
 										onclick={() => (movePaths = [fullPath])}
 									>
 										<Move class="size-4" />
 									</button>
 									<button
-										class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+										class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
 										aria-label="Delete"
+											title="Delete"
 										disabled={entry.protected || !folderPermissions.delete || busyPath === fullPath}
 										onclick={() => trash(entry)}
 									>
@@ -536,4 +564,13 @@
 
 {#if sharePath}
 	<ShareModal path={sharePath.path} filename={sharePath.name} onClose={() => (sharePath = null)} />
+{/if}
+
+{#if permissionTarget}
+	<PermissionsModal
+		path={permissionTarget.path}
+		kind={permissionTarget.kind}
+		onClose={() => (permissionTarget = null)}
+		onSaved={load}
+	/>
 {/if}
