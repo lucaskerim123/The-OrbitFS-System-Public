@@ -467,16 +467,7 @@
 											<ShieldCheck class="size-4" />
 										</button>
 									{/if}
-									{#if entry.type === 'file' && !entry.protected}
-										<button
-											class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-											aria-label="Download"
-											title="Download"
-											disabled={!folderPermissions.download}
-											onclick={() => download(entry)}
-										>
-											<Download class="size-4" />
-										</button>
+									{#if !entry.protected}
 										<button
 											class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
 											aria-label="Share"
@@ -486,16 +477,29 @@
 										>
 											<Link class="size-4" />
 										</button>
+										{#if entry.type === 'file'}
+											<button
+												class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+												aria-label="Download"
+												title="Download"
+												disabled={!folderPermissions.download}
+												onclick={() => download(entry)}
+											>
+												<Download class="size-4" />
+											</button>
+										{/if}
 									{/if}
-									<button
-										class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-										aria-label="Rename"
+									{#if entry.type === 'dir'}
+										<button
+											class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+											aria-label="Rename"
 											title="Rename"
-										disabled={entry.protected || !folderPermissions.move}
-										onclick={() => startRename(entry)}
-									>
-										<Pencil class="size-4" />
-									</button>
+											disabled={entry.protected || !folderPermissions.move}
+											onclick={() => startRename(entry)}
+										>
+											<Pencil class="size-4" />
+										</button>
+									{/if}
 									<button
 										class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
 										aria-label="Move"
@@ -541,6 +545,12 @@
 		onClose={() => (viewerPath = null)}
 		onSaved={load}
 		exportAvailable={addons.available('mcp')}
+		onAccess={canManagePermissions
+			? (path) => {
+					viewerPath = null;
+					permissionTarget = { path, kind: 'file' };
+				}
+			: undefined}
 		onRename={startRenamePath}
 		onMove={(path) => {
 			viewerPath = null;

@@ -2,7 +2,7 @@
 	import { api, ApiError } from '$lib/api';
 	import { kindOf, highlightLangOf } from '$lib/file-type';
 	import { Button } from '$lib/components/ui';
-	import { X, Pencil, Eye, Save, Download, LoaderCircle, Move, Link, Trash2, FileOutput, FileMusic, FileVideoCamera } from '@lucide/svelte';
+	import { X, Pencil, Eye, Save, Download, LoaderCircle, Move, Link, Trash2, FileOutput, FileMusic, FileVideoCamera, ShieldCheck } from '@lucide/svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import hljs from 'highlight.js';
@@ -15,6 +15,7 @@
 		onSaved,
 		onRename,
 		onMove,
+		onAccess,
 		onShare,
 		onTrash,
 		exportAvailable = false,
@@ -25,6 +26,7 @@
 		onSaved?: () => void;
 		onRename?: (path: string) => void;
 		onMove?: (path: string) => void;
+		onAccess?: (path: string) => void;
 		onShare?: (path: string, name: string) => void;
 		onTrash?: (path: string) => void;
 		exportAvailable?: boolean;
@@ -120,7 +122,7 @@
 		documentHtml = '';
 		sheetPreviews = [];
 		activeSheet = 0;
-		if (blobUrl) URL.revokeObjectURL(blobUrl);
+		if (blobUrl?.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
 		blobUrl = null;
 		try {
 			permissions = (await api.get<{ permissions: Permissions }>(`/file-access?path=${encodeURIComponent(path)}`)).permissions;
@@ -134,7 +136,9 @@
 				await loadDocument(await api.previewBlob(path));
 			} else if (kind === 'spreadsheet') {
 				await loadSpreadsheet(await api.previewBlob(path));
-			} else if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'pdf') {
+			} else if (kind === 'video' || kind === 'audio') {
+				blobUrl = await api.previewStreamUrl(path);
+			} else if (kind === 'image' || kind === 'pdf') {
 				blobUrl = await api.previewBlobUrl(path);
 			}
 		} catch (err) {
@@ -148,7 +152,7 @@
 		path;
 		load();
 		return () => {
-			if (blobUrl) URL.revokeObjectURL(blobUrl);
+			if (blobUrl?.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
 		};
 	});
 
@@ -223,9 +227,9 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="fixed inset-0 z-40 flex flex-col bg-background">
-	<header class="flex min-h-14 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+	<header class="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2 sm:flex-nowrap">
 		<span class="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
-		<div class="flex max-w-[72%] shrink-0 items-center gap-1 overflow-x-auto overscroll-contain sm:max-w-none">
+		<div class="flex w-full shrink-0 items-center justify-end gap-1 overflow-x-auto overscroll-contain sm:w-auto">
 			{#if canEdit}
 				{#if editing}
 					<Button size="sm" variant="ghost" onclick={cancelEdit}>
@@ -241,17 +245,19 @@
 					</Button>
 				{/if}
 			{/if}
-			{#if canDownload}
-				<Button size="sm" variant="ghost" onclick={downloadCurrent} aria-label="Download" title="Download">
-					<Download />
+			{#if onAccess}
+				<Button size="sm" variant="ghost" onclick={() => onAccess?.(path)} aria-label="Access" title="Access and permissions">
+					<ShieldCheck />
 				</Button>
 			{/if}
-			<Button size="sm" variant="ghost" onclick={exportFile} aria-label="Export" title="Export through MCP">
-				<FileOutput />
-			</Button>
 			{#if onShare && canShare}
 				<Button size="sm" variant="ghost" onclick={() => onShare?.(path, name)} aria-label="Share" title="Share">
 					<Link />
+				</Button>
+			{/if}
+			{#if canDownload}
+				<Button size="sm" variant="ghost" onclick={downloadCurrent} aria-label="Download" title="Download">
+					<Download />
 				</Button>
 			{/if}
 			{#if onRename && canMove}
@@ -265,10 +271,13 @@
 				</Button>
 			{/if}
 			{#if onTrash && canDelete}
-				<Button size="sm" variant="ghost" onclick={() => onTrash?.(path)} aria-label="Move to trash" title="Move to trash">
+				<Button size="sm" variant="ghost" onclick={() => onTrash?.(path)} aria-label="Delete" title="Move to trash">
 					<Trash2 />
 				</Button>
 			{/if}
+			<Button size="sm" variant="ghost" onclick={exportFile} aria-label="Export" title="Export through MCP">
+				<FileOutput />
+			</Button>
 			<button
 				class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
 				onclick={closeViewer}
@@ -390,6 +399,7 @@
 					<audio
 						src={blobUrl}
 						controls
+						autoplay
 						preload="metadata"
 						class="w-full"
 						onerror={() => (error = 'This audio format or codec cannot be played by this browser.')}
