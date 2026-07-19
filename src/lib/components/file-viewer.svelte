@@ -137,12 +137,14 @@
 			} else if (kind === 'spreadsheet') {
 				await loadSpreadsheet(await api.previewBlob(path));
 			} else if (kind === 'video' || kind === 'audio') {
-				blobUrl = await api.previewStreamUrl(path);
+				blobUrl = typeof api.previewStreamUrl === 'function'
+					? await api.previewStreamUrl(path)
+					: await api.previewBlobUrl(path);
 			} else if (kind === 'image' || kind === 'pdf') {
 				blobUrl = await api.previewBlobUrl(path);
 			}
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to load file';
+			error = err instanceof Error ? err.message : 'Failed to load file';
 		} finally {
 			loading = false;
 		}
@@ -227,9 +229,19 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="fixed inset-0 z-40 flex flex-col bg-background">
-	<header class="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2 sm:flex-nowrap">
-		<span class="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
-		<div class="flex w-full shrink-0 items-center justify-end gap-1 overflow-x-auto overscroll-contain sm:w-auto">
+	<header class="shrink-0 border-b border-border bg-background">
+		<div class="flex h-12 items-center gap-2 px-3">
+			<span class="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+			<button
+				class="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+				onclick={closeViewer}
+				aria-label="Close"
+				title="Close preview"
+			>
+				<X class="size-4" />Close
+			</button>
+		</div>
+		<div class="flex min-h-11 w-full items-center gap-1 overflow-x-auto overscroll-contain border-t border-border bg-card/60 px-3 py-1.5">
 			{#if canEdit}
 				{#if editing}
 					<Button size="sm" variant="ghost" onclick={cancelEdit}>
@@ -247,45 +259,37 @@
 			{/if}
 			{#if onAccess}
 				<Button size="sm" variant="ghost" onclick={() => onAccess?.(path)} aria-label="Access" title="Access and permissions">
-					<ShieldCheck />
+					<ShieldCheck />Access
 				</Button>
 			{/if}
 			{#if onShare && canShare}
 				<Button size="sm" variant="ghost" onclick={() => onShare?.(path, name)} aria-label="Share" title="Share">
-					<Link />
+					<Link />Share
 				</Button>
 			{/if}
 			{#if canDownload}
 				<Button size="sm" variant="ghost" onclick={downloadCurrent} aria-label="Download" title="Download">
-					<Download />
+					<Download />Download
 				</Button>
 			{/if}
 			{#if onRename && canMove}
 				<Button size="sm" variant="ghost" onclick={() => onRename?.(path)} aria-label="Rename" title="Rename">
-					<Pencil />
+					<Pencil />Rename
 				</Button>
 			{/if}
 			{#if onMove && canMove}
 				<Button size="sm" variant="ghost" onclick={() => onMove?.(path)} aria-label="Move" title="Move">
-					<Move />
+					<Move />Move
 				</Button>
 			{/if}
 			{#if onTrash && canDelete}
 				<Button size="sm" variant="ghost" onclick={() => onTrash?.(path)} aria-label="Delete" title="Move to trash">
-					<Trash2 />
+					<Trash2 />Delete
 				</Button>
 			{/if}
 			<Button size="sm" variant="ghost" onclick={exportFile} aria-label="Export" title="Export through MCP">
-				<FileOutput />
+				<FileOutput />Export
 			</Button>
-			<button
-				class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-				onclick={closeViewer}
-				aria-label="Close"
-				title="Close preview"
-			>
-				<X class="size-5" />
-			</button>
 		</div>
 	</header>
 
@@ -314,7 +318,10 @@
 				Loading&hellip;
 			</div>
 		{:else if error}
-			<div class="flex h-full items-center justify-center text-sm text-destructive">{error}</div>
+			<div class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
+				<p>{error}</p>
+				<Button size="sm" variant="outline" onclick={load}>Retry</Button>
+			</div>
 		{:else if kind === 'text' || kind === 'markdown'}
 			{#if editing}
 				<textarea
