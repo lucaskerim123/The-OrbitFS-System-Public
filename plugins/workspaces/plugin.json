@@ -4,13 +4,9 @@
   "version": "0.1.0",
   "detachable": true,
   "frontend": "frontend",
-  "privateBackend": "private-backend",
   "publicFiles": [
     "frontend/routes/workspaces/+page.svelte",
     "frontend/lib/store.svelte.ts",
     "frontend/lib/workspace-selector.svelte"
-  ],
-  "privateFiles": [
-    "private-backend/index.js"
   ]
 }
