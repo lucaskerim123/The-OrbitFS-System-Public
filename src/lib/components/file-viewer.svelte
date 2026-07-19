@@ -1,0 +1,300 @@
+<script lang="ts">
+	import { api, ApiError } from '$lib/api';
+	import { kindOf, highlightLangOf } from '$lib/file-type';
+	import { Button } from '$lib/components/ui';
+	import { X, Pencil, Eye, Save, Download, LoaderCircle, Move, Link, Trash2, FileOutput } from '@lucide/svelte';
+	import { marked } from 'marked';
+	import DOMPurify from 'dompurify';
+	import hljs from 'highlight.js';
+
+	type Permissions = { read: boolean; write: boolean; download: boolean; move: boolean; delete: boolean; create: boolean; share: boolean };
+
+	let {
+		path,
+		onClose,
+		onSaved,
+		onRename,
+		onMove,
+		onShare,
+		onTrash,
+		exportAvailable = false,
+		onExport
+	}: {
+		path: string;
+		onClose: () => void;
+		onSaved?: () => void;
+		onRename?: (path: string) => void;
+		onMove?: (path: string) => void;
+		onShare?: (path: string, name: string) => void;
+		onTrash?: (path: string) => void;
+		exportAvailable?: boolean;
+		onExport?: (path: string, name: string) => void | Promise<void>;
+	} = $props();
+
+	const name = $derived(path.split('/').pop() ?? path);
+	const kind = $derived(kindOf(name));
+
+	let loading = $state(true);
+	let error = $state('');
+	let content = $state('');
+	let permissions = $state<Permissions | null>(null);
+	let editing = $state(false);
+	let draft = $state('');
+	let saving = $state(false);
+	let saveError = $state('');
+	let exportError = $state('');
+	let actionError = $state('');
+
+	let blobUrl = $state<string | null>(null);
+
+	const canEdit = $derived((kind === 'text' || kind === 'markdown') && !!permissions?.write);
+	const canDownload = $derived(!!permissions?.download);
+	const canMove = $derived(!!permissions?.move);
+	const canDelete = $derived(!!permissions?.delete);
+	const canShare = $derived(!!permissions?.share);
+	const isDirty = $derived(editing && draft !== content);
+
+	const renderedMarkdown = $derived.by(() => {
+		if (kind !== 'markdown') return '';
+		return DOMPurify.sanitize(marked.parse(content, { async: false }) as string);
+	});
+
+	const highlighted = $derived.by(() => {
+		if (kind !== 'text') return '';
+		try {
+			const lang = highlightLangOf(name);
+			if (hljs.getLanguage(lang)) return hljs.highlight(content, { language: lang }).value;
+		} catch {
+			// fall through to auto-detect
+		}
+		return hljs.highlightAuto(content).value;
+	});
+
+	async function load() {
+		loading = true;
+		error = '';
+		saveError = '';
+		exportError = '';
+		actionError = '';
+		editing = false;
+		permissions = null;
+		content = '';
+		draft = '';
+		if (blobUrl) URL.revokeObjectURL(blobUrl);
+		blobUrl = null;
+		try {
+			permissions = (await api.get<{ permissions: Permissions }>(`/file-access?path=${encodeURIComponent(path)}`)).permissions;
+			if (kind === 'text' || kind === 'markdown') {
+				const res = await api.get<{ content: string; permissions: Permissions }>(
+					`/file?path=${encodeURIComponent(path)}`
+				);
+				content = res.content;
+				permissions = res.permissions;
+			} else if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'pdf') {
+				blobUrl = await api.previewBlobUrl(path);
+			}
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to load file';
+		} finally {
+			loading = false;
+		}
+	}
+
+	$effect(() => {
+		path;
+		load();
+		return () => {
+			if (blobUrl) URL.revokeObjectURL(blobUrl);
+		};
+	});
+
+	function startEdit() {
+		draft = content;
+		saveError = '';
+		editing = true;
+	}
+
+	async function save() {
+		saving = true;
+		saveError = '';
+		try {
+			await api.put('/file', { path, content: draft });
+			content = draft;
+			editing = false;
+			onSaved?.();
+		} catch (err) {
+			saveError = err instanceof ApiError ? err.message : 'Save failed';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function exportFile() {
+		exportError = '';
+		if (!exportAvailable) {
+			exportError = 'Export is not available. Install, enable and license the MCP integration to use this feature.';
+			return;
+		}
+		if (!onExport) {
+			exportError = 'MCP export integration is available but has not been connected to the panel yet.';
+			return;
+		}
+		try {
+			await onExport(path, name);
+		} catch (err) {
+			exportError = err instanceof ApiError ? err.message : 'Export failed';
+		}
+	}
+
+	function closeViewer() {
+		if (isDirty && !confirm('You have unsaved changes. Discard them?')) return;
+		onClose();
+	}
+
+	function cancelEdit() {
+		if (isDirty && !confirm('Discard unsaved changes?')) return;
+		draft = content;
+		saveError = '';
+		editing = false;
+	}
+
+	async function downloadCurrent() {
+		actionError = '';
+		try {
+			await api.download(path, name);
+		} catch (err) {
+			actionError = err instanceof ApiError ? err.message : 'Download failed';
+		}
+	}
+
+	function onKeydown(e: KeyboardEvent) {
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && editing) {
+			e.preventDefault();
+			if (!saving) save();
+		}
+		if (e.key === 'Escape' && !editing) closeViewer();
+	}
+</script>
+
+<svelte:window onkeydown={onKeydown} />
+
+<div class="fixed inset-0 z-40 flex flex-col bg-background">
+	<header class="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+		<span class="truncate text-sm font-medium">{name}</span>
+		<div class="ml-auto flex items-center gap-2">
+			{#if canEdit}
+				{#if editing}
+					<Button size="sm" variant="ghost" onclick={cancelEdit}>
+						<Eye />Preview
+					</Button>
+					<Button size="sm" onclick={save} disabled={saving || !isDirty}>
+						{#if saving}<LoaderCircle class="size-4 animate-spin" />{:else}<Save />{/if}
+						Save
+					</Button>
+				{:else}
+					<Button size="sm" variant="outline" onclick={startEdit}>
+						<Pencil />Edit
+					</Button>
+				{/if}
+			{/if}
+			{#if canDownload}
+				<Button size="sm" variant="ghost" onclick={downloadCurrent} aria-label="Download">
+					<Download />
+				</Button>
+			{/if}
+			<Button size="sm" variant="ghost" onclick={exportFile} aria-label="Export">
+				<FileOutput />
+			</Button>
+			{#if onShare && canShare}
+				<Button size="sm" variant="ghost" onclick={() => onShare?.(path, name)} aria-label="Share">
+					<Link />
+				</Button>
+			{/if}
+			{#if onRename && canMove}
+				<Button size="sm" variant="ghost" onclick={() => onRename?.(path)} aria-label="Rename">
+					<Pencil />
+				</Button>
+			{/if}
+			{#if onMove && canMove}
+				<Button size="sm" variant="ghost" onclick={() => onMove?.(path)} aria-label="Move">
+					<Move />
+				</Button>
+			{/if}
+			{#if onTrash && canDelete}
+				<Button size="sm" variant="ghost" onclick={() => onTrash?.(path)} aria-label="Move to trash">
+					<Trash2 />
+				</Button>
+			{/if}
+			<button
+				class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+				onclick={closeViewer}
+				aria-label="Close"
+			>
+				<X class="size-5" />
+			</button>
+		</div>
+	</header>
+
+	{#if saveError}
+		<div class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+			{saveError}
+		</div>
+	{/if}
+	{#if exportError}
+		<div class="flex items-center justify-between border-b border-border bg-secondary/50 px-4 py-2 text-sm text-muted-foreground">
+			<span>{exportError}</span>
+			<button onclick={() => (exportError = '')} aria-label="Dismiss export message"><X class="size-4" /></button>
+		</div>
+	{/if}
+	{#if actionError}
+		<div class="flex items-center justify-between border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+			<span>{actionError}</span>
+			<button onclick={() => (actionError = '')} aria-label="Dismiss action message"><X class="size-4" /></button>
+		</div>
+	{/if}
+
+	<div class="flex-1 overflow-auto">
+		{#if loading}
+			<div class="flex h-full items-center justify-center gap-2 text-muted-foreground">
+				<LoaderCircle class="size-6 animate-spin" />
+				Loading&hellip;
+			</div>
+		{:else if error}
+			<div class="flex h-full items-center justify-center text-sm text-destructive">{error}</div>
+		{:else if kind === 'text' || kind === 'markdown'}
+			{#if editing}
+				<textarea
+					bind:value={draft}
+					spellcheck="false"
+					class="h-full w-full resize-none bg-background p-4 font-mono text-sm outline-none"
+				></textarea>
+			{:else if kind === 'markdown'}
+				<div class="prose prose-invert mx-auto max-w-3xl p-6">{@html renderedMarkdown}</div>
+			{:else}
+				<pre class="overflow-auto p-4 text-sm"><code class="hljs">{@html highlighted}</code></pre>
+			{/if}
+		{:else if kind === 'image' && blobUrl}
+			<div class="flex h-full items-center justify-center p-4">
+				<img src={blobUrl} alt={name} class="max-h-full max-w-full object-contain" />
+			</div>
+		{:else if kind === 'video' && blobUrl}
+			<div class="flex h-full items-center justify-center p-4">
+				<!-- svelte-ignore a11y_media_has_caption -->
+				<video src={blobUrl} controls class="max-h-full max-w-full"></video>
+			</div>
+		{:else if kind === 'audio' && blobUrl}
+			<div class="flex h-full items-center justify-center p-4">
+				<audio src={blobUrl} controls></audio>
+			</div>
+		{:else if kind === 'pdf' && blobUrl}
+			<iframe src={blobUrl} title={name} class="h-full w-full border-0"></iframe>
+		{:else}
+			<div class="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+				<p class="text-sm">Preview isn't available for this file type.</p>
+				{#if canDownload}
+					<Button size="sm" onclick={downloadCurrent}><Download />Download</Button>
+				{/if}
+			</div>
+		{/if}
+	</div>
+</div>
