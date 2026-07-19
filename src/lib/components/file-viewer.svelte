@@ -3,6 +3,7 @@
 	import { kindOf, highlightLangOf } from '$lib/file-type';
 	import { Button } from '$lib/components/ui';
 	import { X, Pencil, Eye, Save, Download, LoaderCircle, Move, Link, Trash2, FileOutput, FileMusic, FileVideoCamera, ShieldCheck } from '@lucide/svelte';
+	import { untrack } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import hljs from 'highlight.js';
@@ -46,6 +47,7 @@
 	let saveError = $state('');
 	let exportError = $state('');
 	let actionError = $state('');
+	let loadGeneration = 0;
 
 	let blobUrl = $state<string | null>(null);
 	let documentHtml = $state('');
@@ -110,6 +112,7 @@
 	}
 
 	async function load() {
+		const generation = ++loadGeneration;
 		loading = true;
 		error = '';
 		saveError = '';
@@ -146,14 +149,15 @@
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load file';
 		} finally {
-			loading = false;
+			if (generation === loadGeneration) loading = false;
 		}
 	}
 
 	$effect(() => {
 		path;
-		load();
+		untrack(load);
 		return () => {
+			loadGeneration += 1;
 			if (blobUrl?.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
 		};
 	});
@@ -198,6 +202,7 @@
 
 	function closeViewer() {
 		if (isDirty && !confirm('You have unsaved changes. Discard them?')) return;
+		loadGeneration += 1;
 		onClose();
 	}
 
@@ -236,7 +241,8 @@
 				class="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
 				onclick={closeViewer}
 				aria-label="Close"
-				title="Close preview"
+				title="Close file"
+				type="button"
 			>
 				<X class="size-4" />Close
 			</button>
@@ -245,7 +251,7 @@
 			{#if canEdit}
 				{#if editing}
 					<Button size="sm" variant="ghost" onclick={cancelEdit}>
-						<Eye />Preview
+						<Eye />View
 					</Button>
 					<Button size="sm" onclick={save} disabled={saving || !isDirty}>
 						{#if saving}<LoaderCircle class="size-4 animate-spin" />{:else}<Save />{/if}
@@ -400,7 +406,7 @@
 						</div>
 						<div class="min-w-0">
 							<p class="truncate text-sm font-medium">{name}</p>
-							<p class="text-xs text-muted-foreground">Audio preview</p>
+							<p class="text-xs text-muted-foreground">Audio file</p>
 						</div>
 					</div>
 					<audio
@@ -417,7 +423,7 @@
 			<iframe src={blobUrl} title={name} class="h-full w-full border-0"></iframe>
 		{:else}
 			<div class="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-				<p class="text-sm">Preview isn't available for this file type.</p>
+				<p class="text-sm">This file type can't be viewed here.</p>
 				{#if canDownload}
 					<Button size="sm" onclick={downloadCurrent}><Download />Download</Button>
 				{/if}
