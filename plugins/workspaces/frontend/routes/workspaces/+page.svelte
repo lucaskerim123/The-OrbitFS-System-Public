@@ -11,10 +11,11 @@
 	const roles = ['owner', 'editor', 'contributor', 'viewer'];
 	const editableRoles = ['editor', 'contributor', 'viewer'];
 	const fileActions = ['read', 'write', 'download', 'move', 'delete', 'create', 'share'];
-	const managementActions = ['view_settings', 'edit_settings', 'manage_members', 'manage_permissions', 'send_messages', 'use_sorter', 'manage_sorter_settings', 'delete_workspace'];
+	const managementActions = ['view_settings', 'edit_settings', 'manage_members', 'manage_permissions', 'manage_mcp_startup', 'send_messages', 'use_sorter', 'manage_sorter_settings', 'delete_workspace'];
 	const managementLabels: Record<string, string> = {
 		view_settings: 'View workspace settings', edit_settings: 'Edit workspace settings',
 		manage_members: 'Manage members', manage_permissions: 'Manage permissions',
+		manage_mcp_startup: 'Manage MCP startup',
 		send_messages: 'Send workspace messages', use_sorter: 'Use Sorter',
 		manage_sorter_settings: 'Access Sorter settings', delete_workspace: 'Delete workspace'
 	};
@@ -60,6 +61,7 @@
 	let messages = $state<WorkspaceMessage[]>([]);
 	let globalSettings = $state<GlobalSettings>({ maxWorkspacesPerUser: 1, inactiveBeforeOfflineDays: 30, offlineWarningDays: 7, deleteAfterOfflineDays: 30, deletionWarningDays: 7 });
 	let showGlobal = $state(false);
+	let showAllWorkspaces = $state(false);
 	let createOpen = $state(false);
 	let newName = $state('');
 	let newDescription = $state('');
@@ -87,6 +89,7 @@
 	let transferMessage = $state('');
 
 	const selected = $derived(workspaces.find((item) => item.id === selectedId) ?? null);
+	const displayedWorkspaces = $derived(canManageGlobal && !showAllWorkspaces ? workspaces.filter((item) => item.permission === 'owner' || item.is_main) : workspaces);
 	const pendingInvitations = $derived(invitations.filter((item) => item.status === 'pending'));
 	const pendingStorageRequests = $derived(storageRequests.filter((item) => item.status === 'pending'));
 	const pendingOwnershipRequests = $derived(ownershipRequests.filter((item) => item.status === 'pending'));
@@ -285,7 +288,7 @@
 	{#if notice}<div class="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-500">{notice}</div>{/if}
 	{#if canManageGlobal}
 		<Card>
-			<CardHeader class="flex-row items-start justify-between"><div><CardTitle>Workspace Manager</CardTitle><CardDescription>Global limits and lifecycle rules. Hidden from standard users.</CardDescription></div><Badge variant="secondary">Owner / Admin</Badge></CardHeader>
+			<CardHeader class="flex-row items-start justify-between"><div><CardTitle>Workspace Manager</CardTitle><CardDescription>Global limits and lifecycle rules. Hidden from standard users.</CardDescription></div><Badge variant="secondary">System Owner / Admin</Badge></CardHeader>
 			<CardContent>
 				<Button variant="outline" onclick={() => showGlobal = !showGlobal}>{showGlobal ? 'Hide' : 'Edit'} global rules</Button>
 				{#if showGlobal}<div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -309,7 +312,7 @@
 					{/if}
 				</div>
 				<div class="mt-5 border-t border-border pt-4">
-					<div class="mb-3"><h3 class="text-sm font-semibold">Quota change requests</h3><p class="text-xs text-muted-foreground">Workspace owners request upgrades and downgrades here. Limits change only after approval.</p></div>
+					<div class="mb-3"><h3 class="text-sm font-semibold">Quota change requests</h3><p class="text-xs text-muted-foreground">Workspace-level owners request upgrades and downgrades here. Limits change only after approval.</p></div>
 					{#if pendingStorageRequests.length === 0}<p class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No quota requests waiting for approval.</p>
 					{:else}<div class="space-y-2">{#each pendingStorageRequests as request (request.id)}
 						<div class="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
@@ -333,8 +336,8 @@
 	{/if}
 	{#if loading}<div class="grid place-items-center py-20"><LoaderCircle class="size-7 animate-spin" /></div>
 	{:else}<div class="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-		<Card class="h-fit"><CardHeader><CardTitle>Available workspaces</CardTitle><CardDescription>{workspaces.length} visible</CardDescription></CardHeader><CardContent class="space-y-2">
-			{#each workspaces as item}
+		<Card class="h-fit"><CardHeader><div class="flex items-start justify-between gap-2"><div><CardTitle>Available workspaces</CardTitle><CardDescription>{displayedWorkspaces.length} shown · {workspaces.length} total</CardDescription></div>{#if canManageGlobal}<Button size="sm" variant="outline" onclick={() => showAllWorkspaces = !showAllWorkspaces}>{showAllWorkspaces ? 'My / main only' : 'Show all'}</Button>{/if}</div></CardHeader><CardContent class="space-y-2">
+			{#each displayedWorkspaces as item}
 				<button class="w-full rounded-md border p-3 text-left transition-colors {canAccessWorkspace(item) ? (selectedId === item.id ? 'border-primary bg-primary/10' : 'hover:bg-muted/50') : 'cursor-not-allowed border-muted bg-muted/30 opacity-45 grayscale'}" onclick={() => choose(item.id)} disabled={!canAccessWorkspace(item)} aria-disabled={!canAccessWorkspace(item)}>
 					<div class="flex items-center justify-between gap-2"><strong class="truncate">{item.name}</strong><Badge variant={item.status === 'active' ? 'success' : 'secondary'}>{item.status !== 'active' ? item.status : item.is_public ? 'public main' : item.is_main ? 'private main' : 'active'}</Badge></div>
 					<div class="mt-1 flex justify-between text-xs text-muted-foreground"><span>{item.permission}</span><span>{formatBytes(item.storage_used_bytes)}</span></div>
@@ -351,7 +354,7 @@
 					{#each [['storage','Storage'],['members','Members'],['settings','Settings'],['permissions','Permissions'],['messages','Message']] as item}
 						<Button variant={tab === item[0] ? 'default' : 'outline'} onclick={() => tab = item[0] as typeof tab}>{item[1]}</Button>
 					{/each}
-					<Button variant="outline" onclick={setOffline} disabled={!canManageGlobal}>{selected.status === 'offline' ? 'Bring online' : 'Take offline'}</Button>
+					<Button variant="outline" onclick={setOffline} disabled={selected.permission !== 'owner' || selected.is_main || busy === 'offline'}>{selected.status === 'offline' ? 'Bring online' : 'Take offline'}</Button>
 					<Button variant="outline" onclick={toggleMcp} disabled={!allowed('edit_settings')}>{selected.mcp_ui_enabled ? 'Disable MCP' : 'Enable MCP'}</Button>
 				</div></CardContent>
 			</Card>

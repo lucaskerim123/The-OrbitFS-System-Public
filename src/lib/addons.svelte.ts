@@ -40,6 +40,11 @@ class AddonsStore {
 	available(id: string) {
 		return this.get(id)?.available ?? false;
 	}
+
+	configurable(id: string) {
+		const addon = this.get(id);
+		return Boolean(addon?.installed && addon.licensed && addon.attached);
+	}
 }
 
 export const addons = new AddonsStore();

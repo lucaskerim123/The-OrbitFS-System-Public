@@ -12,7 +12,7 @@ export class ApiError extends Error {
 
 type HeaderProvider = () => Record<string, string>;
 const headerProviders = new Set<HeaderProvider>();
-const API_BASE = (env.PUBLIC_API_BASE || 'http://127.0.0.1:4174/api').replace(/\/$/, '');
+const API_BASE = (env.PUBLIC_API_BASE || '/api').replace(/\/$/, '');
 
 export function registerHeaderProvider(provider: HeaderProvider) {
 	headerProviders.add(provider);

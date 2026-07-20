@@ -20,7 +20,8 @@
 		FileLock,
 		Plug,
 		ListTree,
-		ScrollText
+		ScrollText,
+		ChevronDown
 	} from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -41,46 +42,78 @@
 				href: '/workspaces',
 				icon: Building2
 			},
-			addons.available('sorter') && { label: 'Sorter', href: '/sorter', icon: Sparkles }
 		].filter((item) => item !== false) as { label: string; href: string; icon: typeof Folder }[]
 	);
 
 	const adminGroups = [
 		{
+			label: 'MCP',
+			icon: Plug,
+			requiresAddon: 'mcp',
+			items: [
+				{ label: 'Projects', href: '/mcp/projects', icon: Folder },
+				{ label: 'OrbitFS Startup System (OSS)', href: '/mcp/startup', icon: ListTree },
+				{ label: 'Overview & settings', href: '/admin/mcp/settings', icon: Settings, adminOnly: true },
+				{ label: 'Connected clients', href: '/admin/mcp/clients', icon: Plug, adminOnly: true },
+				{ label: 'Logs', href: '/admin/mcp/logs', icon: ScrollText, adminOnly: true }
+			]
+		},
+		{
+			label: 'Sorter',
+			icon: Sparkles,
+			requiresAddon: 'sorter',
+			items: [
+				{ label: 'Sorter workspace Â· WIP', href: '/sorter', icon: Sparkles }
+			]
+		},
+		{
 			label: 'Systems',
+			icon: Server,
 			items: [
 				{ label: 'Service status', href: '/admin/system/service-status', icon: Server },
 				{ label: 'Licensing system', href: '/admin/license', icon: KeyRound },
 				{ label: 'Message system', href: '/admin/messages', icon: Bell },
-				{ label: 'Logs · WIP', href: '/admin/system/logs', icon: ScrollText }
+				{ label: 'Logs Â· WIP', href: '/admin/system/logs', icon: ScrollText }
 			]
 		},
 		{
 			label: 'Configuration',
+			icon: Settings,
 			items: [
 				{ label: 'Runtime & services', href: '/admin/config/runtime', icon: Settings },
 				{ label: 'Drive config', href: '/admin/config/drive', icon: HardDrive },
 				{ label: 'Add-on management', href: '/admin/addons', icon: Puzzle },
 				{ label: 'File permissions', href: '/admin/file-permissions', icon: FileLock },
-				{ label: 'Startup preset · WIP', href: '/admin/startup-presets', icon: ListTree },
 				{ label: 'Trash settings', href: '/admin/config/trash-settings', icon: Folder }
 			]
 		},
 		{
 			label: 'Administration',
+			icon: Shield,
 			items: [
 				{ label: 'User management', href: '/admin/users', icon: Shield },
 				{ label: 'Usergroup management', href: '/admin/usergroups', icon: Shield },
-				{ label: 'Connected clients · WIP', href: '/admin/connected-clients', icon: Plug },
 				{ label: 'OAuth management', href: '/admin/oauth', icon: KeyRound },
-				{ label: 'Sessions · WIP', href: '/admin/sessions', icon: CircleUser },
+				{ label: 'Sessions Â· WIP', href: '/admin/sessions', icon: CircleUser },
 				{ label: 'Audit logs', href: '/admin/audit-log', icon: ScrollText }
 			]
 		}
 	];
 
 	let mobileNavOpen = $state(false);
+	let expandedGroups = $state<Record<string, boolean>>({});
 	let unreadNotifications = $state(0);
+	let canAccessWorkspaceMcp = $state(false);
+
+	async function loadMcpAccess() {
+		if (auth.isAdmin) { canAccessWorkspaceMcp = true; return; }
+		try {
+			const data = await api.get<{ workspaces: Array<{ permission?: string; management_permissions?: Record<string, boolean> }> }>('/workspaces');
+			canAccessWorkspaceMcp = data.workspaces.some((workspace) =>
+				workspace.permission === 'owner' || Boolean(workspace.management_permissions?.manage_mcp_startup)
+			);
+		} catch { canAccessWorkspaceMcp = false; }
+	}
 
 	async function loadNotificationCount() {
 		try {
@@ -94,10 +127,22 @@
 		return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
 	}
 
+	function groupIsActive(group: { items: Array<{ href: string }> }) {
+		return group.items.some((item) => isActive(item.href));
+	}
+
+	function groupOpen(group: { label: string; items: Array<{ href: string }> }) {
+		return expandedGroups[group.label] ?? groupIsActive(group);
+	}
+
+	function toggleGroup(label: string, active: boolean) {
+		expandedGroups = { ...expandedGroups, [label]: !(expandedGroups[label] ?? active) };
+	}
+
 	const isLoginRoute = $derived(page.url.pathname === '/login');
 	const isFilesRoute = $derived(page.url.pathname === '/');
 
-	// Search is Files-scoped, but the box lives in the shared header — reset it whenever
+	// Search is Files-scoped, but the box lives in the shared header â€” reset it whenever
 	// the user navigates away so it doesn't silently keep filtering a page it can't affect.
 	$effect(() => {
 		if (!isFilesRoute) search.query = '';
@@ -123,14 +168,15 @@
 				.catch(() => {});
 			// This is the only addon-related thing core code does: refresh the generic
 			// installed/attached/licensed registry. Each addon's own store (if loaded) watches
-			// this reactively and resyncs itself — core never calls into addon-specific code.
+			// this reactively and resyncs itself â€” core never calls into addon-specific code.
 			addons.load();
+			loadMcpAccess();
 			loadNotificationCount();
 		}
 	});
 
-	// Addon/licence state can change out from under this tab — another admin session
-	// detaching Workspaces, or a licence lapsing server-side — with nothing pushing us an
+	// Addon/licence state can change out from under this tab â€” another admin session
+	// detaching Workspaces, or a licence lapsing server-side â€” with nothing pushing us an
 	// update. Re-check when the tab regains focus (fast path for "I just changed it
 	// elsewhere") and on a slow interval as a backstop. addons.load() is safe to call from
 	// here: this isn't inside an $effect, so there's no risk of the reactive feedback loop
@@ -139,6 +185,7 @@
 		function resync() {
 			if (auth.isAuthenticated) {
 				addons.load();
+				loadMcpAccess();
 				loadNotificationCount();
 			}
 		}
@@ -159,7 +206,7 @@
 		try {
 			await api.post('/logout');
 		} catch {
-			// ignore — clearing local state regardless
+			// ignore â€” clearing local state regardless
 		}
 		auth.clear();
 		goto('/login');
@@ -204,28 +251,34 @@
 					{/each}
 				</div>
 
-				{#if auth.isAdmin}
-					{#each adminGroups as group (group.label)}
+				{#each adminGroups as group (group.label)}
+					{#if (group.label === 'MCP' ? canAccessWorkspaceMcp : auth.isAdmin) && (!group.requiresAddon || addons.configurable(group.requiresAddon))}
 						<div class="space-y-0.5">
-							<p class="px-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-								{group.label}
-							</p>
-							{#each group.items as item (item.href)}
-								<a
-									href={item.href}
-									class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors {isActive(
-										item.href
-									)
-										? 'bg-sidebar-accent text-sidebar-accent-foreground'
-										: 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'}"
-								>
-									<item.icon class="size-4" />
-									{item.label}
-								</a>
-							{/each}
+							<button
+								type="button"
+								class="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors {groupIsActive(group) ? 'bg-sidebar-accent/70 text-sidebar-accent-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent/60'}"
+								onclick={() => toggleGroup(group.label, groupIsActive(group))}
+								aria-expanded={groupOpen(group)}
+							>
+								<group.icon class="size-4" />
+								<span class="flex-1 text-left">{group.label}</span>
+								<ChevronDown class="size-4 transition-transform {groupOpen(group) ? 'rotate-180' : ''}" />
+							</button>
+							{#if groupOpen(group)}
+								<div class="ml-4 space-y-0.5 border-l border-sidebar-border pl-2">
+									{#each group.items as item (item.href)}
+										{#if !item.adminOnly || auth.isAdmin}
+											<a href={item.href} class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors {isActive(item.href) ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'}">
+												<item.icon class="size-4" />
+												{item.label}
+											</a>
+										{/if}
+									{/each}
+								</div>
+							{/if}
 						</div>
-					{/each}
-				{/if}
+					{/if}
+				{/each}
 			</nav>
 
 			<div class="space-y-0.5 border-t border-sidebar-border p-3">
@@ -307,6 +360,29 @@
 		</div>
 	</div>
 
+	{#if mobileNavOpen}
+		<button class="fixed inset-0 z-30 bg-black/60 md:hidden" aria-label="Close menu" onclick={() => (mobileNavOpen = false)}></button>
+		<aside class="fixed inset-y-0 left-0 z-40 flex w-[min(86vw,320px)] flex-col border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground shadow-2xl md:hidden">
+			<div class="mb-3 flex h-12 items-center justify-between border-b border-sidebar-border px-2">
+				<span class="font-semibold">OrbitFS menu</span>
+				<button class="rounded-md p-2 text-muted-foreground hover:bg-sidebar-accent" onclick={() => (mobileNavOpen = false)} aria-label="Close menu">Ã—</button>
+			</div>
+			<nav class="flex-1 space-y-1 overflow-y-auto">
+				{#each primaryNav as item (item.href)}
+					<a href={item.href} onclick={() => (mobileNavOpen = false)} class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold {isActive(item.href) ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent/60'}"><item.icon class="size-4" />{item.label}</a>
+				{/each}
+				{#each adminGroups as group (group.label)}
+					{#if (group.label === 'MCP' ? canAccessWorkspaceMcp : auth.isAdmin) && (!group.requiresAddon || addons.configurable(group.requiresAddon))}
+						<div class="space-y-0.5">
+							<button type="button" class="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold {groupIsActive(group) ? 'bg-sidebar-accent/70' : 'hover:bg-sidebar-accent/60'}" onclick={() => toggleGroup(group.label, groupIsActive(group))}><group.icon class="size-4" /><span class="flex-1 text-left">{group.label}</span><ChevronDown class="size-4 transition-transform {groupOpen(group) ? 'rotate-180' : ''}" /></button>
+							{#if groupOpen(group)}<div class="ml-4 space-y-0.5 border-l border-sidebar-border pl-2">{#each group.items as item (item.href)}{#if !item.adminOnly || auth.isAdmin}<a href={item.href} onclick={() => (mobileNavOpen = false)} class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm {isActive(item.href) ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent/60'}"><item.icon class="size-4" />{item.label}</a>{/if}{/each}</div>{/if}
+						</div>
+					{/if}
+				{/each}
+			</nav>
+		</aside>
+	{/if}
+
 	<!-- Mobile bottom nav -->
 	<nav
 		class="fixed inset-x-0 bottom-0 z-20 flex h-14 items-stretch border-t border-sidebar-border bg-sidebar md:hidden"
@@ -324,16 +400,9 @@
 				{item.label}
 			</a>
 		{/each}
-		<a
-			href={auth.isAdmin ? '/admin/users' : '/account'}
-			class="flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium {page.url.pathname.startsWith(
-				'/admin'
-			) || page.url.pathname === '/account'
-				? 'text-primary'
-				: 'text-muted-foreground'}"
-		>
+		<button type="button" onclick={() => (mobileNavOpen = true)} class="flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium {mobileNavOpen || page.url.pathname.startsWith('/admin') || page.url.pathname.startsWith('/mcp') ? 'text-primary' : 'text-muted-foreground'}">
 			<Menu class="size-5" />
 			More
-		</a>
+		</button>
 	</nav>
 {/if}
