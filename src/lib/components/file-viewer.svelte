@@ -55,7 +55,7 @@
 	let sheetPreviews = $state<SheetPreview[]>([]);
 	let activeSheet = $state(0);
 
-	const canEdit = $derived((kind === 'text' || kind === 'markdown') && !!permissions?.write);
+	const canEdit = $derived((kind === 'text' || kind === 'markdown' || kind === 'document') && !!permissions?.write);
 	const canDownload = $derived(!!permissions?.download);
 	const canMove = $derived(!!permissions?.move);
 	const canDelete = $derived(!!permissions?.delete);
@@ -90,8 +90,14 @@
 
 	async function loadDocument(blob: Blob) {
 		const mammoth = await import('mammoth');
-		const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
-		documentHtml = DOMPurify.sanitize(result.value);
+		const arrayBuffer = await blob.arrayBuffer();
+		const [htmlResult, textResult] = await Promise.all([
+			mammoth.convertToHtml({ arrayBuffer }),
+			mammoth.extractRawText({ arrayBuffer })
+		]);
+		documentHtml = DOMPurify.sanitize(htmlResult.value);
+		content = textResult.value.replace(/\n+$/, '');
+		draft = content;
 	}
 
 	async function loadSpreadsheet(blob: Blob) {
@@ -172,9 +178,16 @@
 		saving = true;
 		saveError = '';
 		try {
-			await api.put('/file', { path, content: draft });
-			content = draft;
-			editing = false;
+			if (kind === 'document') {
+				await api.put('/document', { path, text: draft });
+				content = draft;
+				editing = false;
+				await load();
+			} else {
+				await api.put('/file', { path, content: draft });
+				content = draft;
+				editing = false;
+			}
 			onSaved?.();
 		} catch (err) {
 			saveError = err instanceof ApiError ? err.message : 'Save failed';
@@ -328,24 +341,24 @@
 				<p>{error}</p>
 				<Button size="sm" variant="outline" onclick={load}>Retry</Button>
 			</div>
-		{:else if kind === 'text' || kind === 'markdown'}
+		{:else if kind === 'text' || kind === 'markdown' || kind === 'document'}
 			{#if editing}
 				<textarea
 					bind:value={draft}
-					spellcheck="false"
-					class="h-full w-full resize-none bg-background p-4 font-mono text-sm outline-none"
+					spellcheck={kind === 'document' || kind === 'markdown'}
+					class="h-full w-full resize-none bg-background p-4 text-sm outline-none {kind === 'document' ? 'font-sans leading-7' : 'font-mono'}"
 				></textarea>
 			{:else if kind === 'markdown'}
 				<div class="prose prose-invert mx-auto max-w-3xl p-6">{@html renderedMarkdown}</div>
+			{:else if kind === 'document' && documentHtml}
+				<div class="min-h-full bg-muted/30 p-3 md:p-8">
+					<article class="prose mx-auto min-h-[70vh] max-w-4xl rounded-lg bg-white px-6 py-8 text-black shadow-xl md:px-12 md:py-10">
+						{@html documentHtml}
+					</article>
+				</div>
 			{:else}
 				<pre class="overflow-auto p-4 text-sm"><code class="hljs">{@html highlighted}</code></pre>
 			{/if}
-		{:else if kind === 'document' && documentHtml}
-			<div class="min-h-full bg-muted/30 p-3 md:p-8">
-				<article class="prose mx-auto min-h-[70vh] max-w-4xl rounded-lg bg-white px-6 py-8 text-black shadow-xl md:px-12 md:py-10">
-					{@html documentHtml}
-				</article>
-			</div>
 		{:else if kind === 'spreadsheet' && sheetPreviews.length > 0}
 			{@const sheet = sheetPreviews[activeSheet]}
 			<div class="flex h-full min-w-0 flex-col">

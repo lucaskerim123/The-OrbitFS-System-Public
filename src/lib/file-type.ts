@@ -2,8 +2,11 @@ export type FileKind = 'text' | 'markdown' | 'document' | 'spreadsheet' | 'prese
 
 const MARKDOWN_EXT = new Set(['md', 'markdown']);
 const TEXT_EXT = new Set([
-	'txt', 'json', 'jsonl', 'csv', 'log', 'xml', 'html', 'css', 'js', 'mjs', 'ts', 'tsx', 'jsx',
-	'yml', 'yaml', 'py', 'sh', 'toml', 'ini', 'env', 'svelte', 'vue', 'sql', 'graphql'
+	'txt', 'json', 'jsonl', 'csv', 'log', 'xml', 'html', 'htm', 'css', 'scss', 'sass', 'less',
+	'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'php', 'java', 'lua', 'py', 'rb', 'go', 'rs',
+	'c', 'h', 'cpp', 'cc', 'cxx', 'hpp', 'cs', 'swift', 'kt', 'kts', 'dart', 'scala',
+	'sh', 'bash', 'zsh', 'ps1', 'bat', 'cmd', 'sql', 'graphql', 'gql', 'svelte', 'vue',
+	'yml', 'yaml', 'toml', 'ini', 'cfg', 'conf', 'env', 'properties', 'dockerfile', 'gitignore'
 ]);
 const DOCUMENT_EXT = new Set(['docx']);
 const SPREADSHEET_EXT = new Set(['xlsx']);
