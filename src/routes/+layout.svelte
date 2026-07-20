@@ -127,6 +127,13 @@
 		return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
 	}
 
+	function requiredAddon(pathname: string) {
+		if (pathname === '/workspaces' || pathname.startsWith('/workspaces/')) return 'workspaces';
+		if (pathname === '/sorter' || pathname.startsWith('/sorter/')) return 'sorter';
+		if (pathname === '/mcp' || pathname.startsWith('/mcp/') || pathname.startsWith('/admin/mcp/')) return 'mcp';
+		return null;
+	}
+
 	function groupIsActive(group: { items: Array<{ href: string }> }) {
 		return group.items.some((item) => isActive(item.href));
 	}
@@ -155,6 +162,12 @@
 		} else if (auth.isAuthenticated && isLoginRoute) {
 			goto('/');
 		}
+	});
+
+	$effect(() => {
+		if (!auth.isAuthenticated || !addons.loaded) return;
+		const required = requiredAddon(page.url.pathname);
+		if (required && !addons.available(required)) goto(auth.isAdmin ? '/admin/addons' : '/');
 	});
 
 	onMount(() => {
