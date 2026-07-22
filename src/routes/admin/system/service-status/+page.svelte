@@ -4,7 +4,7 @@
 	import { Globe, HardDrive, LoaderCircle, Play, RefreshCw, RotateCw, Server, Sparkles, Square } from '@lucide/svelte';
 
 	type ServiceStatus = { status?: string; running?: boolean; reachable?: boolean; service?: string | null };
-	type SystemStatus = { panel?: ServiceStatus; hive?: ServiceStatus; tunnel?: ServiceStatus; sorter?: ServiceStatus };
+	type SystemStatus = { panel?: ServiceStatus; mcp?: ServiceStatus; hive?: ServiceStatus; tunnel?: ServiceStatus; sorter?: ServiceStatus };
 
 	const services: {
 		key: keyof SystemStatus;
@@ -13,7 +13,7 @@
 		restartOnly?: boolean;
 	}[] = [
 		{ key: 'panel', label: 'Panel', icon: HardDrive },
-		{ key: 'hive', label: 'MCP server', icon: Server },
+		{ key: 'mcp', label: 'MCP server', icon: Server },
 		{ key: 'tunnel', label: 'Cloudflare tunnel', icon: Globe, restartOnly: true },
 		{ key: 'sorter', label: 'Sorter', icon: Sparkles }
 	];

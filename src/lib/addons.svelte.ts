@@ -43,7 +43,7 @@ class AddonsStore {
 
 	configurable(id: string) {
 		const addon = this.get(id);
-		return Boolean(addon?.installed && addon.licensed && addon.attached);
+		return Boolean(addon?.installed && addon.licensed);
 	}
 }
 

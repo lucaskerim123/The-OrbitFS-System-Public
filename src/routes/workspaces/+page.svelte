@@ -5,7 +5,7 @@
 	const PluginPage: any = entry?.default ?? null;
 </script>
 
-{#if addons.available('workspaces') && PluginPage}
+{#if addons.configurable('workspaces') && PluginPage}
 	<PluginPage />
 {:else}
 	<div class="mx-auto max-w-xl p-6">

@@ -66,7 +66,7 @@
 			<Settings2 class="size-5 text-muted-foreground" />
 			Config
 		</h1>
-		<p class="text-sm text-muted-foreground">Post-install runtime settings, services, URLs, paths, add-ons, Google Drive, and startup presets.</p>
+		<p class="text-sm text-muted-foreground">Runtime paths, Google Drive, and startup presets.</p>
 	</div>
 
 	<Card>
@@ -75,7 +75,7 @@
 				<FolderCog class="size-4 text-muted-foreground" />
 				Runtime
 			</CardTitle>
-			<CardDescription>Current runtime values. Edit them from the runtime/services pages below; some changes require a restart.</CardDescription>
+			<CardDescription>Paths and ports the panel is currently running with (read-only).</CardDescription>
 		</CardHeader>
 		<CardContent>
 			{#if runtimeLoading}
@@ -102,25 +102,6 @@
 			{/if}
 		</CardContent>
 	</Card>
-
-	<div class="grid gap-3 md:grid-cols-2">
-		<a href="/admin/config/install" class="rounded-lg border border-border bg-card p-4 text-sm hover:bg-accent/40">
-			<p class="font-medium">Install / linking</p>
-			<p class="text-muted-foreground">Core panel, licence API, MCP URL, deploy mode, and add-on roots.</p>
-		</a>
-		<a href="/admin/config/paths" class="rounded-lg border border-border bg-card p-4 text-sm hover:bg-accent/40">
-			<p class="font-medium">Runtime paths</p>
-			<p class="text-muted-foreground">Storage, workspaces, system, and plugin/add-on directories.</p>
-		</a>
-		<a href="/admin/config/ports-urls" class="rounded-lg border border-border bg-card p-4 text-sm hover:bg-accent/40">
-			<p class="font-medium">Ports / URLs</p>
-			<p class="text-muted-foreground">Frontend API base, panel public URL, licence API, and MCP URL.</p>
-		</a>
-		<a href="/admin/config/service-names" class="rounded-lg border border-border bg-card p-4 text-sm hover:bg-accent/40">
-			<p class="font-medium">Service names</p>
-			<p class="text-muted-foreground">Panel, backend, MCP, Cloudflare, and optional service names.</p>
-		</a>
-	</div>
 
 	<Card>
 		<CardHeader>
