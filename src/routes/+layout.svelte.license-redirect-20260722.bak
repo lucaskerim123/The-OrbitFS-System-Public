@@ -123,19 +123,6 @@
 		}
 	}
 
-	async function redirectIfLicenceInvalid(refresh = false) {
-		if (!auth.isAuthenticated || !auth.isAdmin || page.url.pathname.startsWith('/admin/license')) return;
-		try {
-			const summary = await api.get<{ enforcement?: boolean; reason?: string; components?: Record<string, { allowed?: boolean; reason?: string | null }> }>(`/license/status${refresh ? '?refresh=1' : ''}`);
-			const panel = summary.components?.orbitfs_panel;
-			if (summary.enforcement !== false && panel?.allowed !== true) {
-				goto(`/admin/license?reason=${encodeURIComponent(panel?.reason ?? summary.reason ?? 'panel_invalid')}`);
-			}
-		} catch {
-			// Normal API error handling will catch restricted pages.
-		}
-	}
-
 	function isActive(href: string) {
 		return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
 	}
@@ -198,7 +185,6 @@
 			addons.load();
 			loadMcpAccess();
 			loadNotificationCount();
-			redirectIfLicenceInvalid(false);
 		}
 	});
 
@@ -214,13 +200,12 @@
 				addons.load();
 				loadMcpAccess();
 				loadNotificationCount();
-				redirectIfLicenceInvalid(true);
 			}
 		}
 		function onVisible() {
 			if (document.visibilityState === 'visible') resync();
 		}
-		const interval = setInterval(resync, 60_000);
+		const interval = setInterval(resync, 120_000);
 		document.addEventListener('visibilitychange', onVisible);
 		return () => {
 			clearInterval(interval);

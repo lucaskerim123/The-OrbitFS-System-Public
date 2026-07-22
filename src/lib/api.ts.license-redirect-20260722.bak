@@ -4,11 +4,9 @@ import { auth } from './auth.svelte';
 
 export class ApiError extends Error {
 	status: number;
-	code?: string;
-	constructor(message: string, status: number, code?: string) {
+	constructor(message: string, status: number) {
 		super(message);
 		this.status = status;
-		this.code = code;
 	}
 }
 
@@ -42,15 +40,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 	if (res.status === 401) { auth.clear(); throw new ApiError('Session expired', 401); }
 	const isJson = res.headers.get('content-type')?.includes('application/json');
 	const body = isJson ? await res.json().catch(() => ({})) : null;
-	if (!res.ok) {
-		const code = body?.code;
-		if (code === 'LICENSE_REQUIRED' || code === 'LICENSE_COMPONENT_DENIED') {
-			if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/admin/license')) {
-				window.location.assign('/admin/license?reason=invalid');
-			}
-		}
-		throw new ApiError(body?.error || res.statusText || 'Request failed', res.status, code);
-	}
+	if (!res.ok) throw new ApiError(body?.error || res.statusText || 'Request failed', res.status);
 	return body as T;
 }
 
