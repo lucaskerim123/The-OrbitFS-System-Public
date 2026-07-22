@@ -53,6 +53,7 @@
 			items: [
 				{ label: 'Projects', href: '/mcp/projects', icon: Folder },
 				{ label: 'OrbitFS Startup System (OSS)', href: '/mcp/startup', icon: ListTree },
+				{ label: 'Workspace AI System', href: '/mcp/system', icon: Settings },
 				{ label: 'Overview & settings', href: '/admin/mcp/settings', icon: Settings, adminOnly: true },
 				{ label: 'Connected clients', href: '/admin/mcp/clients', icon: Plug, adminOnly: true },
 				{ label: 'Logs', href: '/admin/mcp/logs', icon: ScrollText, adminOnly: true }

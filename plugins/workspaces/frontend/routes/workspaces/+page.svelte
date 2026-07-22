@@ -185,13 +185,12 @@
 	async function saveWorkspace() {
 		if (!selected) return;
 		const changes: Record<string, unknown> = { name: settingsName, description: settingsDescription };
-		if (canManageGlobal) Object.assign(changes, {
-			storageQuotaBytes: settingsQuotaGb * GiB,
-			trashLimitBytes: settingsTrashMb * MiB,
-			ownerUsername: settingsOwner,
-			status: settingsStatus,
-			suspensionReason
-		});
+		if (canManageGlobal) {
+			changes.storageQuotaBytes = settingsQuotaGb * GiB;
+			changes.trashLimitBytes = settingsTrashMb * MiB;
+			changes.status = settingsStatus;
+			changes.suspensionReason = suspensionReason;
+		}
 		await run('settings', () => api.patch(`/workspaces/${selected.id}`, changes));
 	}
 	async function setOffline() {
@@ -378,7 +377,7 @@
 					<label class="space-y-1 text-sm"><span>Name</span><Input bind:value={settingsName} disabled={!allowed('edit_settings')} /></label>
 					<label class="space-y-1 text-sm md:col-span-2"><span>Description</span><textarea class="min-h-24 w-full rounded-md border bg-background p-3" bind:value={settingsDescription} disabled={!allowed('edit_settings')}></textarea></label>
 					{#if canManageGlobal}
-						<label class="space-y-1 text-sm"><span>Owner username</span><Input bind:value={settingsOwner} disabled={selected.is_main} /></label>
+						<div class="rounded-md border bg-muted/20 p-3 text-sm"><span class="text-xs uppercase text-muted-foreground">Current owner</span><p class="mt-1 font-medium">{selected.owner_username || 'Unknown'}</p></div>
 						<label class="space-y-1 text-sm"><span>Quota (GB)</span><Input type="number" min="1" bind:value={settingsQuotaGb} /></label>
 						<label class="space-y-1 text-sm"><span>Trash limit (MB)</span><Input type="number" min="1" bind:value={settingsTrashMb} /></label>
 						<label class="space-y-1 text-sm"><span>Status</span><select class="h-10 w-full rounded-md border bg-background px-3" bind:value={settingsStatus}>{#each ['active','offline','suspended','archived'] as status}<option value={status}>{status}</option>{/each}</select></label>

@@ -65,18 +65,24 @@
 	}
 </script>
 
-<div class="flex min-h-dvh items-center justify-center bg-background p-4">
-	<div class="w-full max-w-sm space-y-6">
-		<div class="flex flex-col items-center gap-2 text-center">
-			<div class="flex size-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
-				<HardDrive class="size-6" />
+<div class="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background p-4">
+	<div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.12),transparent_32%)]"></div>
+	<div class="relative w-full max-w-sm space-y-5">
+		<div class="rounded-2xl border border-border/70 bg-card/70 p-5 text-center shadow-2xl shadow-black/30 backdrop-blur">
+			<div class="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl border border-primary/30 bg-primary/15 text-primary shadow-[0_0_35px_rgba(59,130,246,0.25)]">
+				<HardDrive class="size-7" />
 			</div>
-			<h1 class="text-lg font-semibold tracking-tight">OrbitFS Panel</h1>
-			<p class="text-sm text-muted-foreground">File manager &amp; server control</p>
+			<h1 class="text-xl font-semibold tracking-tight">OrbitFS Panel</h1>
+			<p class="text-sm text-muted-foreground">Secure workspace, files, and service control.</p>
+			<div class="mt-4 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
+				<span class="rounded-full border border-border/70 bg-background/60 px-2 py-1">Panel</span>
+				<span class="rounded-full border border-border/70 bg-background/60 px-2 py-1">MCP</span>
+				<span class="rounded-full border border-border/70 bg-background/60 px-2 py-1">Storage</span>
+			</div>
 		</div>
 
-		<Card>
-			<CardContent class="pt-4">
+		<Card class="border-border/80 bg-card/90 shadow-xl shadow-black/25 backdrop-blur">
+			<CardContent class="pt-5">
 				{#if forcedToken}
 					<form class="space-y-4" onsubmit={changeTemporaryPin}>
 						<div class="space-y-1">
