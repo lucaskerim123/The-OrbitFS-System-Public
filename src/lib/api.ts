@@ -44,9 +44,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 	const body = isJson ? await res.json().catch(() => ({})) : null;
 	if (!res.ok) {
 		const code = body?.code;
-		if (code === 'LICENSE_REQUIRED' || code === 'LICENSE_COMPONENT_DENIED') {
+		const component = body?.component;
+		const panelFailure = component === 'orbitfs_panel' || component === null || component === undefined;
+		if ((code === 'LICENSE_REQUIRED' || code === 'LICENSE_COMPONENT_DENIED') && panelFailure) {
 			if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/admin/license')) {
-				window.location.assign('/admin/license?reason=invalid');
+				window.location.assign('/admin/license?reason=panel_invalid');
 			}
 		}
 		throw new ApiError(body?.error || res.statusText || 'Request failed', res.status, code);

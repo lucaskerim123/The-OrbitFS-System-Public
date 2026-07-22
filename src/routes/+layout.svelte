@@ -104,6 +104,7 @@
 	let expandedGroups = $state<Record<string, boolean>>({});
 	let unreadNotifications = $state(0);
 	let canAccessWorkspaceMcp = $state(false);
+	let bootstrappedToken = $state<string | null>(null);
 
 	async function loadMcpAccess() {
 		if (auth.isAdmin) { canAccessWorkspaceMcp = true; return; }
@@ -180,7 +181,7 @@
 	$effect(() => {
 		if (!auth.isAuthenticated || !addons.loaded) return;
 		const required = requiredAddon(page.url.pathname);
-		if (required && !addons.available(required)) goto(auth.isAdmin ? '/admin/addons' : '/');
+		if (required && !addons.configurable(required)) goto(auth.isAdmin ? '/admin/addons' : '/');
 	});
 
 	onMount(() => {
@@ -188,18 +189,21 @@
 	});
 
 	$effect(() => {
-		if (auth.isAuthenticated) {
-			api.get<{ user?: { username: string; role: 'owner' | 'owner' | 'admin' | 'user'; email?: string }; username?: string; role?: 'owner' | 'owner' | 'admin' | 'user'; email?: string }>('/me')
-				.then((res) => auth.setUser(res.user ?? { username: res.username!, role: res.role!, email: res.email }))
-				.catch(() => {});
-			// This is the only addon-related thing core code does: refresh the generic
-			// installed/attached/licensed registry. Each addon's own store (if loaded) watches
-			// this reactively and resyncs itself â€” core never calls into addon-specific code.
-			addons.load();
-			loadMcpAccess();
-			loadNotificationCount();
-			redirectIfLicenceInvalid(false);
+		const token = auth.token;
+		if (!token) {
+			bootstrappedToken = null;
+			return;
 		}
+		if (bootstrappedToken === token) return;
+		bootstrappedToken = token;
+
+		api.get<{ user?: { username: string; role: 'owner' | 'owner' | 'admin' | 'user'; email?: string }; username?: string; role?: 'owner' | 'owner' | 'admin' | 'user'; email?: string }>('/me')
+			.then((res) => auth.setUser(res.user ?? { username: res.username!, role: res.role!, email: res.email }))
+			.catch(() => {});
+		addons.load();
+		loadMcpAccess();
+		loadNotificationCount();
+		redirectIfLicenceInvalid(false);
 	});
 
 	// Addon/licence state can change out from under this tab â€” another admin session
@@ -280,7 +284,7 @@
 				</div>
 
 				{#each adminGroups as group (group.label)}
-					{#if (group.label === 'MCP' ? canAccessWorkspaceMcp : auth.isAdmin) && (!group.requiresAddon || addons.available(group.requiresAddon))}
+					{#if (group.label === 'MCP' ? canAccessWorkspaceMcp : auth.isAdmin) && (!group.requiresAddon || addons.configurable(group.requiresAddon))}
 						<div class="space-y-0.5">
 							<button
 								type="button"
@@ -400,7 +404,7 @@
 					<a href={item.href} onclick={() => (mobileNavOpen = false)} class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold {isActive(item.href) ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent/60'}"><item.icon class="size-4" />{item.label}</a>
 				{/each}
 				{#each adminGroups as group (group.label)}
-					{#if (group.label === 'MCP' ? canAccessWorkspaceMcp : auth.isAdmin) && (!group.requiresAddon || addons.available(group.requiresAddon))}
+					{#if (group.label === 'MCP' ? canAccessWorkspaceMcp : auth.isAdmin) && (!group.requiresAddon || addons.configurable(group.requiresAddon))}
 						<div class="space-y-0.5">
 							<button type="button" class="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold {groupIsActive(group) ? 'bg-sidebar-accent/70' : 'hover:bg-sidebar-accent/60'}" onclick={() => toggleGroup(group.label, groupIsActive(group))}><group.icon class="size-4" /><span class="flex-1 text-left">{group.label}</span><ChevronDown class="size-4 transition-transform {groupOpen(group) ? 'rotate-180' : ''}" /></button>
 							{#if groupOpen(group)}<div class="ml-4 space-y-0.5 border-l border-sidebar-border pl-2">{#each group.items as item (item.href)}{#if !item.adminOnly || auth.isAdmin}<a href={item.href} onclick={() => (mobileNavOpen = false)} class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm {isActive(item.href) ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent/60'}"><item.icon class="size-4" />{item.label}</a>{/if}{/each}</div>{/if}

@@ -6,7 +6,7 @@
     "frontend":  "frontend",
     "licenseComponent":  "orbitfs_mcp",
     "runtimeRoot":  "C:/ProgramData/OrbitFS/MCP",
-    "sourceRoot":  "C:/New Setup/dev/OrbitFS-MCP-1",
+    "sourceRoot":  "O:/OrbitFS-Engine/OrbitFS-MCP",
     "serviceName":  "OrbitFSMcpServer",
     "healthUrl":  "http://127.0.0.1:3939/health",
     "preflightCommand":  "npm run panel-preflight",
