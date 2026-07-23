@@ -181,7 +181,7 @@
 		const jobs = Array.from(fileList).map((file) => ({
 			id: `${Date.now()}-${crypto.randomUUID()}`,
 			file,
-			name: uploadExtractZip ? `${file.name} → extract to /${currentPath || ''}` : file.name,
+			name: uploadExtractZip ? `${file.name} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ extract to /${currentPath || ''}` : file.name,
 			pct: 0,
 			extractZip: uploadExtractZip && file.name.toLowerCase().endsWith('.zip')
 		}));
@@ -302,7 +302,8 @@
 		bulkBusy = true;
 		error = '';
 		try {
-			await api.downloadSelectedZip(paths, 'selected-items.zip');
+			const zipBase = paths.length === 1 ? (basename(paths[0]) || 'root') : (basename(currentPath) || 'root');
+			await api.downloadSelectedZip(paths, zipBase + '.zip');
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'ZIP download failed';
 		} finally {
@@ -341,7 +342,7 @@
 			<Button variant="outline" size="sm" onclick={() => (creatingFolder = true)} disabled={!folderPermissions.create}>
 				<FolderPlus />New folder
 			</Button>
-			<Button variant="outline" size="sm" onclick={() => downloadZip(currentPath, basename(currentPath) || 'workspace-root')} disabled={!folderPermissions.download}>
+			<Button variant="outline" size="sm" onclick={() => downloadZip(currentPath, basename(currentPath) || 'root')} disabled={!folderPermissions.download}>
 				<Download />Download ZIP
 			</Button>
 			<Button size="sm" onclick={() => (uploadPanelOpen = true)} disabled={!folderPermissions.create}>
@@ -516,10 +517,10 @@
 								{/if}
 							</td>
 							<td class="hidden px-4 py-2 text-muted-foreground sm:table-cell">
-								{entry.mtime ? formatDate(entry.mtime) : '—'}
+								{entry.mtime ? formatDate(entry.mtime) : 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â'}
 							</td>
 							<td class="hidden px-4 py-2 text-muted-foreground sm:table-cell">
-								{entry.type === 'file' && entry.size != null ? formatBytes(entry.size) : '—'}
+								{entry.type === 'file' && entry.size != null ? formatBytes(entry.size) : 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â'}
 							</td>
 							<td class="px-4 py-2">
 								<div class="flex justify-end gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">

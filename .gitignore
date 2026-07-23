@@ -21,3 +21,5 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+src/lib/api.ts.bak-20260723-023349
+*.bak-20260723-023349

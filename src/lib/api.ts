@@ -79,17 +79,17 @@ export const api = {
 	download: async (path: string, filename: string) => {
 		return api.downloadEndpoint(`/download?path=${encodeURIComponent(path)}`, filename);
 	},
-	downloadSelectedZip: async (paths: string[]) => {
+	downloadSelectedZip: async (paths: string[], filename: string) => {
 		const res = await fetch(apiUrl('/download-zip-selected'), { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ paths }) });
 		if (!res.ok) throw new ApiError('Selected ZIP download failed', res.status);
 		const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a');
-		a.href = url; a.download = 'selected-items.zip'; a.click(); URL.revokeObjectURL(url);
+		a.href = url; a.download = filename.endsWith('.zip') ? filename : (filename || 'root') + '.zip'; a.click(); URL.revokeObjectURL(url);
 	},
 	downloadZip: async (path: string, filename: string) => {
 		const res = await fetch(apiUrl(`/download-zip?path=${encodeURIComponent(path)}`), { headers: authHeaders() });
 		if (!res.ok) throw new ApiError('ZIP download failed', res.status);
 		const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a');
-		a.href = url; a.download = filename.endsWith('.zip') ? filename : `${filename || 'download'}.zip`; a.click(); URL.revokeObjectURL(url);
+		a.href = url; a.download = filename.endsWith('.zip') ? filename : (filename || 'root') + '.zip'; a.click(); URL.revokeObjectURL(url);
 	},
 	uploadZipExtract: (path: string, file: File, onProgress?: (pct: number) => void) => new Promise<void>((resolve, reject) => {
 		const xhr = new XMLHttpRequest(); xhr.open('POST', apiUrl(`/upload-zip-extract?path=${encodeURIComponent(path)}`));
